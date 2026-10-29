@@ -84,6 +84,15 @@ func can_occupy(x: int, y: int, bottom_height: float, body_height: float) -> boo
 	return true
 
 
+func can_occupy_area(center: Vector2, radius: float, bottom_height: float, body_height: float) -> bool:
+	var bounds := _get_footprint_cell_bounds(center, radius)
+	for y in range(bounds.position.y, bounds.position.y + bounds.size.y):
+		for x in range(bounds.position.x, bounds.position.x + bounds.size.x):
+			if not can_occupy(x, y, bottom_height, body_height):
+				return false
+	return true
+
+
 func find_ceiling_bottom(x: int, y: int, old_top: float, new_top: float) -> float:
 	if new_top <= old_top:
 		return NO_FLOOR
@@ -91,6 +100,26 @@ func find_ceiling_bottom(x: int, y: int, old_top: float, new_top: float) -> floa
 		if get_cell(x, y, level) == CellType.CEILING and old_top <= float(level) and new_top > float(level):
 			return float(level)
 	return NO_FLOOR
+
+
+func find_ceiling_bottom_area(center: Vector2, radius: float, old_top: float, new_top: float) -> float:
+	var bounds := _get_footprint_cell_bounds(center, radius)
+	var nearest_ceiling := NO_FLOOR
+	for y in range(bounds.position.y, bounds.position.y + bounds.size.y):
+		for x in range(bounds.position.x, bounds.position.x + bounds.size.x):
+			var ceiling_bottom := find_ceiling_bottom(x, y, old_top, new_top)
+			if ceiling_bottom >= 0.0 and (nearest_ceiling < 0.0 or ceiling_bottom < nearest_ceiling):
+				nearest_ceiling = ceiling_bottom
+	return nearest_ceiling
+
+
+func _get_footprint_cell_bounds(center: Vector2, radius: float) -> Rect2i:
+	var minimum_cell := world_to_cell(center - Vector2.ONE * radius)
+	var maximum_cell := world_to_cell(center + Vector2.ONE * radius - Vector2.ONE * 0.001)
+	return Rect2i(
+		minimum_cell,
+		Vector2i(maximum_cell.x - minimum_cell.x + 1, maximum_cell.y - minimum_cell.y + 1)
+	)
 
 
 func is_overhead_cell(x: int, y: int, level: int) -> bool:

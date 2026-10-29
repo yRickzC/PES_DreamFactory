@@ -6,7 +6,7 @@ class_name PlayerSystem
 @onready var world_system: WorldSystem = get_node("../WorldSystem")
 
 const BODY_HEIGHT := 0.72
-const MAX_STEP_UP := 1.0
+const BODY_RADIUS := 5.0
 const GRAVITY := 18.0
 const JUMP_IMPULSE := 7.4
 const FALL_LIMIT := -2.5
@@ -62,22 +62,20 @@ func _try_move_by(displacement: Vector2) -> void:
 	if not world_system.is_inside_cell(target_cell.x, target_cell.y):
 		return
 
-	var target_elevation := elevation
-	var target_support := world_system.get_support_below(target_cell.x, target_cell.y, elevation + MAX_STEP_UP + 0.01)
-	if is_grounded and target_support > elevation + MAX_STEP_UP + 0.01:
+	var target_support := world_system.get_support_below(target_cell.x, target_cell.y, WorldSystem.HEIGHT_LEVELS)
+	if is_grounded and target_support > elevation + 0.01:
 		return
-	if is_grounded and target_support >= elevation - 0.05 and target_support <= elevation + MAX_STEP_UP + 0.01:
+	var target_elevation := elevation
+	if is_grounded and target_support >= elevation - 0.05 and target_support <= elevation + 0.01:
 		target_elevation = target_support
-	if not world_system.can_occupy(target_cell.x, target_cell.y, target_elevation, BODY_HEIGHT):
+	if not world_system.can_occupy_area(target_position, BODY_RADIUS, target_elevation, BODY_HEIGHT):
 		return
 
 	global_position = target_position
 	if is_grounded:
-		if target_support >= elevation - 0.05 and target_support <= elevation + MAX_STEP_UP + 0.01:
+		if target_support >= elevation - 0.05 and target_support <= elevation + 0.01:
 			elevation = target_support
 		elif target_support < elevation - 0.05:
-			is_grounded = false
-		elif target_support < 0.0:
 			is_grounded = false
 
 
@@ -98,9 +96,9 @@ func _update_vertical_motion(delta: float, jump_just_pressed: bool) -> void:
 		vertical_velocity -= GRAVITY * delta
 		var next_elevation := elevation + vertical_velocity * delta
 		if vertical_velocity > 0.0:
-			var ceiling_bottom := world_system.find_ceiling_bottom(
-				cell.x,
-				cell.y,
+			var ceiling_bottom := world_system.find_ceiling_bottom_area(
+				global_position,
+				BODY_RADIUS,
 				previous_elevation + BODY_HEIGHT,
 				next_elevation + BODY_HEIGHT
 			)

@@ -38,7 +38,7 @@ func _process(delta: float) -> void:
 	var text := "MUNDO 64 x 64 x 8\n"
 	text += "POS %02d, %02d   %s   %s\n" % [cell.x, cell.y, height_readout, state]
 	text += "WASD/SETAS mover   ESPACO pular   R reiniciar\n"
-	text += "ESCADA: 0 BAIXO -> 7 ALTO\n"
+	text += "SUBA PULANDO: 0 BAIXO -> 7 ALTO\n"
 	text += "PARKOUR/QUEDA   PONTE/TUNEL   TELHADO"
 	if readout.text != text:
 		readout.text = text
