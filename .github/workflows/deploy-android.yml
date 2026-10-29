@@ -43,7 +43,7 @@ jobs:
           echo "$RUNNER_TEMP/godot/Godot_v${release}_linux.x86_64" >> "$GITHUB_PATH"
           curl -fsSL "https://github.com/godotengine/godot/releases/download/${release}/Godot_v${release}_export_templates.tpz" -o "$RUNNER_TEMP/export-templates.tpz"
           unzip -q "$RUNNER_TEMP/export-templates.tpz" -d "$RUNNER_TEMP/export-templates"
-          cp -R "$RUNNER_TEMP/export-templates/templates/${GODOT_VERSION}.stable/." "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+          cp -R "$RUNNER_TEMP/export-templates/templates/." "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
 
       - name: Configure Android paths for Godot
         run: |
