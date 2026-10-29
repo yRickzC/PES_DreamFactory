@@ -6,11 +6,25 @@ const MAP_DEPTH := 64
 const HEIGHT_LEVELS := 8
 const TILE_SIZE := 16
 const HEIGHT_STEP_PIXELS := 8
+const DRAW_MARGIN_TILES := 6
 const NO_FLOOR := -1.0
+const STAIR_START_X := 4
+const STAIR_MARKER_ROW := 11
+const STONE_LEVEL_COLORS := [
+	Color8(101, 126, 124),
+	Color8(112, 139, 127),
+	Color8(128, 151, 126),
+	Color8(148, 160, 123),
+	Color8(169, 165, 117),
+	Color8(188, 160, 105),
+	Color8(197, 143, 95),
+	Color8(194, 122, 91),
+]
 
 enum CellType { EMPTY, GRASS, PATH, STONE, WATER, SOLID, ROOF, CEILING }
 
 var cells := PackedByteArray()
+var _last_visible_bounds := Rect2i(-1, -1, -1, -1)
 
 
 func _ready() -> void:
@@ -18,6 +32,13 @@ func _ready() -> void:
 	cells.fill(CellType.EMPTY)
 	_build_test_map()
 	queue_redraw()
+
+
+func _process(_delta: float) -> void:
+	var bounds := get_visible_cell_bounds()
+	if bounds != _last_visible_bounds:
+		_last_visible_bounds = bounds
+		queue_redraw()
 
 
 func get_cell(x: int, y: int, level: int) -> int:
@@ -97,8 +118,8 @@ func get_visible_cell_bounds() -> Rect2i:
 	var last_corner := inverse_canvas * view_size
 	var left := clampi(floori(minf(first_corner.x, last_corner.x) / TILE_SIZE) - 3, 0, MAP_WIDTH)
 	var right := clampi(ceili(maxf(first_corner.x, last_corner.x) / TILE_SIZE) + 3, 0, MAP_WIDTH)
-	var top := clampi(floori(minf(first_corner.y, last_corner.y) / TILE_SIZE) - HEIGHT_LEVELS - 2, 0, MAP_DEPTH)
-	var bottom := clampi(ceili(maxf(first_corner.y, last_corner.y) / TILE_SIZE) + 3, 0, MAP_DEPTH)
+	var top := clampi(floori(minf(first_corner.y, last_corner.y) / TILE_SIZE) - DRAW_MARGIN_TILES, 0, MAP_DEPTH)
+	var bottom := clampi(ceili(maxf(first_corner.y, last_corner.y) / TILE_SIZE) + DRAW_MARGIN_TILES, 0, MAP_DEPTH)
 	return Rect2i(Vector2i(left, top), Vector2i(right - left, bottom - top))
 
 
@@ -106,23 +127,24 @@ func _draw() -> void:
 	var bounds := get_visible_cell_bounds()
 	for y in range(bounds.position.y, bounds.position.y + bounds.size.y):
 		for x in range(bounds.position.x, bounds.position.x + bounds.size.x):
-			for level in range(HEIGHT_LEVELS):
-				var cell_type := get_cell(x, y, level)
-				if cell_type == CellType.GRASS or cell_type == CellType.PATH or cell_type == CellType.STONE or cell_type == CellType.WATER:
-					_draw_floor(x, y, level, cell_type)
-				elif cell_type == CellType.SOLID:
-					_draw_solid(x, y, level)
+			_draw_cell_surface(x, y)
+	_draw_stair_height_markers(bounds)
+
+
+func _draw_cell_surface(x: int, y: int) -> void:
+	for level in range(HEIGHT_LEVELS - 1, -1, -1):
+		var cell_type := get_cell(x, y, level)
+		if cell_type == CellType.GRASS or cell_type == CellType.PATH or cell_type == CellType.STONE or cell_type == CellType.WATER:
+			_draw_floor(x, y, level, cell_type)
+			return
+		if cell_type == CellType.SOLID:
+			_draw_solid_column(x, y, level + 1)
+			return
 
 
 func _draw_floor(x: int, y: int, level: int, cell_type: int) -> void:
-	var color := _floor_color(x, y, cell_type)
-	var top_left := Vector2(x * TILE_SIZE, y * TILE_SIZE - level * HEIGHT_STEP_PIXELS)
-	if level > 0:
-		var side := Rect2(top_left + Vector2(0, TILE_SIZE), Vector2(TILE_SIZE, level * HEIGHT_STEP_PIXELS))
-		draw_rect(side, color.darkened(0.48))
-	var tile := Rect2(top_left, Vector2(TILE_SIZE, TILE_SIZE))
-	draw_rect(tile, color)
-	draw_rect(tile, Color(0.06, 0.13, 0.12, 0.28), false, 1.0)
+	var color := _floor_color(x, y, cell_type, level)
+	_draw_raised_surface(x, y, level, color)
 	if cell_type == CellType.WATER:
 		var ripple_x := x * TILE_SIZE + 3 + ((y * 5) % 5)
 		var ripple_y := y * TILE_SIZE + 4 + ((x * 3) % 7)
@@ -130,25 +152,43 @@ func _draw_floor(x: int, y: int, level: int, cell_type: int) -> void:
 		draw_rect(Rect2(Vector2(ripple_x + 5, ripple_y + 6), Vector2(4, 2)), Color(0.55, 0.83, 0.92, 0.38))
 
 
-func _draw_solid(x: int, y: int, level: int) -> void:
+func _draw_solid_column(x: int, y: int, surface_level: int) -> void:
+	var color := Color(0.36, 0.42, 0.43).lightened(float(surface_level) * 0.025)
+	_draw_raised_surface(x, y, surface_level, color)
+
+
+func _draw_raised_surface(x: int, y: int, level: int, color: Color) -> void:
 	var top_left := Vector2(x * TILE_SIZE, y * TILE_SIZE - level * HEIGHT_STEP_PIXELS)
-	var stone := Color(0.38, 0.43, 0.47)
-	draw_rect(Rect2(top_left + Vector2(0, TILE_SIZE - HEIGHT_STEP_PIXELS), Vector2(TILE_SIZE, HEIGHT_STEP_PIXELS)), stone.darkened(0.5))
-	draw_rect(Rect2(top_left, Vector2(TILE_SIZE, TILE_SIZE - HEIGHT_STEP_PIXELS)), stone)
-	draw_rect(Rect2(top_left, Vector2(TILE_SIZE, TILE_SIZE)), Color(0.08, 0.12, 0.16, 0.42), false, 1.0)
+	if level > 0:
+		var side := Rect2(top_left + Vector2(0, TILE_SIZE), Vector2(TILE_SIZE, level * HEIGHT_STEP_PIXELS))
+		draw_rect(side, color.darkened(0.46))
+	draw_rect(Rect2(top_left, Vector2(TILE_SIZE, TILE_SIZE)), color)
 
 
-func _floor_color(x: int, y: int, cell_type: int) -> Color:
-	var shade := float((x * 7 + y * 11) % 4) * 0.018
+func _draw_stair_height_markers(bounds: Rect2i) -> void:
+	var marker_y := STAIR_MARKER_ROW
+	if marker_y < bounds.position.y or marker_y >= bounds.position.y + bounds.size.y:
+		return
+	for level in range(HEIGHT_LEVELS):
+		var x := STAIR_START_X + level * 2
+		if x < bounds.position.x or x >= bounds.position.x + bounds.size.x:
+			continue
+		var marker_position := Vector2(x * TILE_SIZE + 3, marker_y * TILE_SIZE - level * HEIGHT_STEP_PIXELS + 3)
+		draw_rect(Rect2(marker_position, Vector2(10, 11)), Color(0.035, 0.075, 0.075, 0.9))
+		draw_string(ThemeDB.fallback_font, marker_position + Vector2(2, 9), str(level), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(0.95, 0.98, 0.86))
+
+
+func _floor_color(x: int, y: int, cell_type: int, level: int) -> Color:
+	var shade := float((x * 7 + y * 11) % 4) * 0.012
 	match cell_type:
 		CellType.PATH:
-			return Color(0.72 + shade, 0.56 + shade, 0.32 + shade)
+			return Color(0.66 + shade, 0.50 + shade, 0.29 + shade)
 		CellType.STONE:
-			return Color(0.54 + shade, 0.61 + shade, 0.62 + shade)
+			return STONE_LEVEL_COLORS[clampi(level, 0, HEIGHT_LEVELS - 1)].lightened(shade)
 		CellType.WATER:
 			return Color(0.12, 0.39 + shade, 0.66 + shade)
 		_:
-			return Color(0.20 + shade, 0.56 + shade, 0.24 + shade)
+			return Color(0.20 + shade, 0.53 + shade, 0.24 + shade)
 
 
 func _cell_index(x: int, y: int, level: int) -> int:

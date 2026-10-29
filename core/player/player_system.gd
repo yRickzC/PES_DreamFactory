@@ -15,6 +15,8 @@ var elevation := 0.0
 var vertical_velocity := 0.0
 var is_grounded := true
 var spawn_position := Vector2.ZERO
+var shadow_elevation := 0.0
+var _has_ground_shadow := false
 var _jump_was_pressed := false
 var _reset_was_pressed := false
 
@@ -25,6 +27,7 @@ func _ready() -> void:
 	var support := world_system.get_support_below(cell.x, cell.y, 0.05)
 	if support >= 0.0:
 		elevation = support
+	_update_shadow_projection()
 	_update_visual_height()
 
 
@@ -39,6 +42,7 @@ func _physics_process(delta: float) -> void:
 
 	_move_on_ground(movement_component.get_direction() * movement_component.speed * delta)
 	_update_vertical_motion(delta, jump_just_pressed)
+	_update_shadow_projection()
 	_update_visual_height()
 
 
@@ -116,8 +120,22 @@ func _update_vertical_motion(delta: float, jump_just_pressed: bool) -> void:
 
 
 func _update_visual_height() -> void:
-	texture_component.position.y = -elevation * WorldSystem.HEIGHT_STEP_PIXELS
-	queue_redraw()
+	var visual_y := -elevation * WorldSystem.HEIGHT_STEP_PIXELS
+	if not is_equal_approx(texture_component.position.y, visual_y):
+		texture_component.position.y = visual_y
+
+
+func _update_shadow_projection() -> void:
+	var cell := world_system.world_to_cell(global_position)
+	var support := world_system.get_support_below(cell.x, cell.y, elevation + 0.05)
+	var has_shadow := support >= 0.0
+	var shadow_changed := has_shadow != _has_ground_shadow
+	if has_shadow:
+		shadow_changed = shadow_changed or not is_equal_approx(shadow_elevation, support)
+		shadow_elevation = support
+	_has_ground_shadow = has_shadow
+	if shadow_changed:
+		queue_redraw()
 
 
 func _respawn() -> void:
@@ -128,7 +146,11 @@ func _respawn() -> void:
 		elevation = 0.0
 	vertical_velocity = 0.0
 	is_grounded = true
+	_update_shadow_projection()
 
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2(-7.0, -3.0), Vector2(14.0, 6.0)), Color(0.06, 0.13, 0.12, 0.42))
+	if not _has_ground_shadow:
+		return
+	var shadow_y := -shadow_elevation * WorldSystem.HEIGHT_STEP_PIXELS + 4.0
+	draw_rect(Rect2(Vector2(-5.0, shadow_y), Vector2(10.0, 4.0)), Color(0.04, 0.08, 0.07, 0.38))

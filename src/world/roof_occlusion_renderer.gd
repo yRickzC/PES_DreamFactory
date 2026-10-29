@@ -7,6 +7,7 @@ const ROOF_SHADER := preload("res://src/world/roof_occlusion.gdshader")
 @onready var player_system: PlayerSystem = get_node("../Player")
 
 var roof_material: ShaderMaterial
+var _last_visible_bounds := Rect2i(-1, -1, -1, -1)
 
 
 func _ready() -> void:
@@ -19,6 +20,10 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if not is_instance_valid(player_system):
 		return
+	var bounds := world_system.get_visible_cell_bounds()
+	if bounds != _last_visible_bounds:
+		_last_visible_bounds = bounds
+		queue_redraw()
 	var screen_position := get_viewport().get_canvas_transform() * player_system.global_position
 	screen_position.y -= player_system.elevation * WorldSystem.HEIGHT_STEP_PIXELS
 	roof_material.set_shader_parameter("player_screen_position", screen_position)

@@ -14,5 +14,4 @@ script = ExtResource("2_movement")
 script = ExtResource("3_texture")
 
 [node name="FollowCamera" type="Camera2D" parent="."]
-position_smoothing_enabled = true
-position_smoothing_speed = 7.0
+position_smoothing_enabled = false
