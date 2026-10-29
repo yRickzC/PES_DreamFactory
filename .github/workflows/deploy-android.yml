@@ -46,9 +46,12 @@ jobs:
           cp -R "$RUNNER_TEMP/export-templates/templates/." "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
 
       - name: Configure Android paths for Godot
+        env:
+          GODOT_VERSION: 4.7.2
         run: |
           mkdir -p "$HOME/.config/godot"
-          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          editor_settings_version="${GODOT_VERSION%.*}"
+          cat > "$HOME/.config/godot/editor_settings-${editor_settings_version}.tres" <<EOF
           [gd_resource type="EditorSettings" format=3]
 
           [resource]
