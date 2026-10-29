@@ -36,6 +36,11 @@ func _process(delta: float) -> void:
 		var support_text := "BASE %d" % floori(player_system.shadow_elevation) if player_system._has_ground_shadow else "SEM APOIO"
 		height_readout = "ALTURA %.2f  %s" % [player_system.elevation, support_text]
 	var text := "MUNDO 64 x 64 x 8\n"
+	if not player_system.is_grounded:
+		if player_system.has_landing_target:
+			text += "POUSO Z%d EM %.1fs (mantendo a direcao)\n" % [roundi(player_system.landing_target.z), player_system.landing_time]
+		else:
+			text += "SEM PISO NO TRAJETO\n"
 	text += "POS %02d, %02d   %s   %s\n" % [cell.x, cell.y, height_readout, state]
 	text += "WASD/SETAS mover   ESPACO pular   R reiniciar\n"
 	text += "SUBA PULANDO: 0 BAIXO -> 7 ALTO\n"

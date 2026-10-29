@@ -24,17 +24,32 @@ const STONE_LEVEL_COLORS := [
 enum CellType { EMPTY, GRASS, PATH, STONE, WATER, SOLID, ROOF, CEILING }
 
 var cells := PackedByteArray()
+var _support_masks := PackedInt32Array()
+var _blocker_masks := PackedInt32Array()
+var _surface_levels := PackedInt32Array()
+var _surface_types := PackedByteArray()
+var overhead_cells: Array[Vector3i] = []
+var _render_dirty := true
+var render_revision := 0
 var _last_visible_bounds := Rect2i(-1, -1, -1, -1)
 
 
 func _ready() -> void:
 	cells.resize(MAP_WIDTH * MAP_DEPTH * HEIGHT_LEVELS)
 	cells.fill(CellType.EMPTY)
+	_support_masks.resize(MAP_WIDTH * MAP_DEPTH)
+	_blocker_masks.resize(MAP_WIDTH * MAP_DEPTH)
+	_surface_levels.resize(MAP_WIDTH * MAP_DEPTH)
+	_surface_types.resize(MAP_WIDTH * MAP_DEPTH)
 	_build_test_map()
+	_rebuild_render_cache()
 	queue_redraw()
 
 
 func _process(_delta: float) -> void:
+	if _render_dirty:
+		_rebuild_render_cache()
+		queue_redraw()
 	var bounds := get_visible_cell_bounds()
 	if bounds != _last_visible_bounds:
 		_last_visible_bounds = bounds
@@ -51,6 +66,15 @@ func set_cell(x: int, y: int, level: int, cell_type: int) -> void:
 	if not is_inside_cell(x, y) or level < 0 or level >= HEIGHT_LEVELS:
 		return
 	cells[_cell_index(x, y, level)] = cell_type
+	var column := y * MAP_WIDTH + x
+	var bit := 1 << level
+	_support_masks[column] &= ~bit
+	_blocker_masks[column] &= ~bit
+	if cell_type in [CellType.GRASS, CellType.PATH, CellType.STONE, CellType.WATER]:
+		_support_masks[column] |= bit
+	if cell_type == CellType.SOLID or cell_type == CellType.CEILING:
+		_blocker_masks[column] |= bit
+	_render_dirty = true
 
 
 func is_inside_cell(x: int, y: int) -> bool:
@@ -65,22 +89,31 @@ func get_support_below(x: int, y: int, max_height: float) -> float:
 	if not is_inside_cell(x, y):
 		return NO_FLOOR
 	var top_level := mini(HEIGHT_LEVELS - 1, floori(max_height + 0.001))
+	var mask := _support_masks[y * MAP_WIDTH + x]
 	for level in range(top_level, -1, -1):
-		var cell_type := get_cell(x, y, level)
-		if cell_type == CellType.GRASS or cell_type == CellType.PATH or cell_type == CellType.STONE:
+		if mask & (1 << level):
 			return float(level)
 	return NO_FLOOR
+
+
+func get_support_below_area(center: Vector2, radius: float, max_height: float) -> float:
+	var bounds := _get_footprint_cell_bounds(center, radius)
+	var support := NO_FLOOR
+	for y in range(bounds.position.y, bounds.end.y):
+		for x in range(bounds.position.x, bounds.end.x):
+			support = maxf(support, get_support_below(x, y, max_height))
+	return support
 
 
 func can_occupy(x: int, y: int, bottom_height: float, body_height: float) -> bool:
 	if not is_inside_cell(x, y):
 		return false
-	var top_height := bottom_height + body_height
-	for level in range(HEIGHT_LEVELS):
-		var cell_type := get_cell(x, y, level)
-		if cell_type == CellType.SOLID or cell_type == CellType.CEILING or cell_type == CellType.WATER:
-			if bottom_height < float(level + 1) - 0.001 and top_height > float(level) + 0.001:
-				return false
+	var mask := _blocker_masks[y * MAP_WIDTH + x]
+	var first := maxi(0, floori(bottom_height + 0.001))
+	var last := mini(HEIGHT_LEVELS - 1, ceili(bottom_height + body_height - 0.001) - 1)
+	for level in range(first, last + 1):
+		if mask & (1 << level):
+			return false
 	return true
 
 
@@ -94,10 +127,13 @@ func can_occupy_area(center: Vector2, radius: float, bottom_height: float, body_
 
 
 func find_ceiling_bottom(x: int, y: int, old_top: float, new_top: float) -> float:
-	if new_top <= old_top:
+	if new_top <= old_top or not is_inside_cell(x, y):
 		return NO_FLOOR
-	for level in range(HEIGHT_LEVELS):
-		if get_cell(x, y, level) == CellType.CEILING and old_top <= float(level) and new_top > float(level):
+	var first := maxi(0, ceili(old_top))
+	var last := mini(HEIGHT_LEVELS - 1, ceili(new_top) - 1)
+	var mask := _blocker_masks[y * MAP_WIDTH + x]
+	for level in range(first, last + 1):
+		if mask & (1 << level):
 			return float(level)
 	return NO_FLOOR
 
@@ -160,15 +196,37 @@ func _draw() -> void:
 	_draw_stair_height_markers(bounds)
 
 
+func _rebuild_render_cache() -> void:
+	overhead_cells.clear()
+	for y in range(MAP_DEPTH):
+		for x in range(MAP_WIDTH):
+			var column := y * MAP_WIDTH + x
+			_surface_levels[column] = -1
+			for level in range(HEIGHT_LEVELS - 1, -1, -1):
+				var kind := get_cell(x, y, level)
+				if kind in [CellType.ROOF, CellType.CEILING]:
+					overhead_cells.append(Vector3i(x, y, level))
+					break
+			for level in range(HEIGHT_LEVELS - 1, -1, -1):
+				var kind := get_cell(x, y, level)
+				if kind in [CellType.GRASS, CellType.PATH, CellType.STONE, CellType.WATER, CellType.SOLID]:
+					_surface_levels[column] = level
+					_surface_types[column] = kind
+					break
+	_render_dirty = false
+	render_revision += 1
+
+
 func _draw_cell_surface(x: int, y: int) -> void:
-	for level in range(HEIGHT_LEVELS - 1, -1, -1):
-		var cell_type := get_cell(x, y, level)
-		if cell_type == CellType.GRASS or cell_type == CellType.PATH or cell_type == CellType.STONE or cell_type == CellType.WATER:
-			_draw_floor(x, y, level, cell_type)
-			return
-		if cell_type == CellType.SOLID:
-			_draw_solid_column(x, y, level + 1)
-			return
+	var column := y * MAP_WIDTH + x
+	var level := _surface_levels[column]
+	if level < 0:
+		return
+	var kind := _surface_types[column]
+	if kind == CellType.SOLID:
+		_draw_solid_column(x, y, level + 1)
+	else:
+		_draw_floor(x, y, level, kind)
 
 
 func _draw_floor(x: int, y: int, level: int, cell_type: int) -> void:
@@ -188,10 +246,26 @@ func _draw_solid_column(x: int, y: int, surface_level: int) -> void:
 
 func _draw_raised_surface(x: int, y: int, level: int, color: Color) -> void:
 	var top_left := Vector2(x * TILE_SIZE, y * TILE_SIZE - level * HEIGHT_STEP_PIXELS)
-	if level > 0:
-		var side := Rect2(top_left + Vector2(0, TILE_SIZE), Vector2(TILE_SIZE, level * HEIGHT_STEP_PIXELS))
-		draw_rect(side, color.darkened(0.46))
+	var front_level := _render_height(x, y + 1)
+	var exposed_height := maxi(0, level - maxi(0, front_level))
+	if exposed_height > 0:
+		var face_top := top_left + Vector2(0, TILE_SIZE)
+		draw_rect(Rect2(face_top, Vector2(TILE_SIZE, exposed_height * HEIGHT_STEP_PIXELS)), color.darkened(0.46))
+		for band in range(1, exposed_height):
+			var start := face_top + Vector2(0, band * HEIGHT_STEP_PIXELS)
+			draw_line(start, start + Vector2(TILE_SIZE, 0), color.darkened(0.6), 1.0)
 	draw_rect(Rect2(top_left, Vector2(TILE_SIZE, TILE_SIZE)), color)
+	if exposed_height > 0:
+		draw_line(top_left + Vector2(0, TILE_SIZE - 1), top_left + Vector2(TILE_SIZE, TILE_SIZE - 1), color.lightened(0.25), 1.0)
+	if level > _render_height(x - 1, y):
+		draw_line(top_left, top_left + Vector2(0, TILE_SIZE), color.darkened(0.35), 1.0)
+
+
+func _render_height(x: int, y: int) -> int:
+	if not is_inside_cell(x, y):
+		return 0
+	var column := y * MAP_WIDTH + x
+	return _surface_levels[column] + (1 if _surface_types[column] == CellType.SOLID else 0)
 
 
 func _draw_stair_height_markers(bounds: Rect2i) -> void:
@@ -300,7 +374,7 @@ func _build_test_map() -> void:
 	for x in range(49, 55):
 		set_cell(x, 28, 0, CellType.PATH)
 
-	# A small pond is a solid height-zero obstacle for collision testing.
+	# Water supports the player at level zero without damage or respawn.
 	for y in range(49, 57):
 		for x in range(4, 13):
 			set_cell(x, y, 0, CellType.WATER)

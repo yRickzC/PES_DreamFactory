@@ -36,6 +36,9 @@ jobs:
       - name: Import project resources
         run: godot --headless --editor --path . --quit
 
+      - name: Verify world physics
+        run: godot --headless --path . --script tests/world_physics_test.gd
+
       - name: Export web build
         run: |
           mkdir -p build/web
