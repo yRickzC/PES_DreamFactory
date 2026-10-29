@@ -13,9 +13,12 @@ config_version=5
 config/name="Factorio"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
+run/main_scene="res://src/scenes/main.tscn"
 
 [display]
 
+window/size/viewport_width=960
+window/size/viewport_height=540
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
@@ -25,6 +28,7 @@ window/stretch/aspect="expand"
 
 [rendering]
 
+environment/defaults/default_clear_color=Color(0.055, 0.067, 0.09, 1)
 textures/vram_compression/import_etc2_astc=true
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="gl_compatibility"
