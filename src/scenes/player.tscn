@@ -1,15 +1,10 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://core/player/player_system.gd" id="1_player"]
 [ext_resource type="Script" path="res://src/components/movement_component.gd" id="2_movement"]
 [ext_resource type="Script" path="res://src/components/texture_component.gd" id="3_texture"]
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_player"]
-size = Vector2(28, 28)
-
-[node name="Player" type="CharacterBody2D"]
-collision_layer = 2
-collision_mask = 1
+[node name="Player" type="Node2D"]
 script = ExtResource("1_player")
 
 [node name="MovementComponent" type="Node" parent="."]
@@ -18,5 +13,6 @@ script = ExtResource("2_movement")
 [node name="TextureComponent" type="Node2D" parent="."]
 script = ExtResource("3_texture")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-shape = SubResource("RectangleShape2D_player")
+[node name="FollowCamera" type="Camera2D" parent="."]
+position_smoothing_enabled = true
+position_smoothing_speed = 7.0

@@ -4,8 +4,8 @@ class_name TextureComponent
 const OUTLINE_COLOR := Color(0.055, 0.12, 0.18, 1.0)
 
 @export var texture: Texture2D
-@export var placeholder_size := Vector2(32.0, 32.0)
-@export var placeholder_color := Color(0.24, 0.78, 0.98, 1.0)
+@export var placeholder_size := Vector2(12.0, 12.0)
+@export var placeholder_color := Color(0.96, 0.36, 0.28, 1.0)
 
 
 func _ready() -> void:

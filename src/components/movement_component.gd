@@ -1,11 +1,15 @@
 extends Node
 class_name MovementComponent
 
-@export_range(0.0, 1000.0, 1.0) var speed: float = 220.0
+@export_range(0.0, 1000.0, 1.0) var speed: float = 112.0
+
+
+func get_direction() -> Vector2:
+	return _get_direction()
 
 
 func get_velocity() -> Vector2:
-	return _get_direction() * speed
+	return get_direction() * speed
 
 
 func _get_direction() -> Vector2:
