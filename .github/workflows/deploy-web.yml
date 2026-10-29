@@ -1,0 +1,73 @@
+name: Deploy web to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Godot and export templates
+        env:
+          GODOT_VERSION: 4.7.2
+        run: |
+          set -euo pipefail
+          release="${GODOT_VERSION}-stable"
+          mkdir -p "$RUNNER_TEMP/godot" "$RUNNER_TEMP/export-templates"
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          curl -fsSL "https://github.com/godotengine/godot/releases/download/${release}/Godot_v${release}_linux.x86_64.zip" -o "$RUNNER_TEMP/godot.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          echo "$RUNNER_TEMP/godot/Godot_v${release}_linux.x86_64" >> "$GITHUB_PATH"
+          curl -fsSL "https://github.com/godotengine/godot/releases/download/${release}/Godot_v${release}_export_templates.tpz" -o "$RUNNER_TEMP/export-templates.tpz"
+          unzip -q "$RUNNER_TEMP/export-templates.tpz" -d "$RUNNER_TEMP/export-templates"
+          cp -R "$RUNNER_TEMP/export-templates/templates/${GODOT_VERSION}.stable/." "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+
+      - name: Import project resources
+        run: godot --headless --editor --path . --quit
+
+      - name: Export web build
+        run: |
+          mkdir -p build/web
+          godot --headless --path . --export-release "Web" build/web/index.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Publish site
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Add site link to workflow summary
+        env:
+          PAGES_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          echo "GitHub Pages URL: $PAGES_URL" >> "$GITHUB_STEP_SUMMARY"
